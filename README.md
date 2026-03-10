@@ -12,6 +12,8 @@ This pack is for technical inbound acquisition on Postman / GitHub / Dev.to / Ha
    - Minimal webhook endpoint with HMAC signature verification.
 5. `webhook-receiver-python-sample.py`
    - Flask-based webhook endpoint with the same signature verification + deterministic ledger key pattern.
+6. `openapi.yaml`
+   - OpenAPI 3.0.3 spec for inbound-discovery endpoints (for API directories like APIs.guru).
 
 ## 10-minute demo flow (for prospects)
 

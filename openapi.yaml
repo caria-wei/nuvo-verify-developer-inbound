@@ -1,0 +1,429 @@
+openapi: 3.0.3
+info:
+  title: NUVO Verify Merchant API (Developer Inbound Subset)
+  version: 1.0.0
+  description: |
+    Public developer-facing subset used in the NUVO Verify inbound starter pack.
+    This spec focuses on merchant login, payment link flow, webhooks, order proof,
+    and risk visibility endpoints.
+servers:
+  - url: https://admin.nuorbit.nuvosphere.io
+    description: NUVO Verify API base
+
+tags:
+  - name: Auth
+  - name: Payment Links
+  - name: Orders
+  - name: Webhooks
+  - name: Risk
+  - name: Public Risk
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+    LoginResponse:
+      type: object
+      properties:
+        token:
+          type: string
+        role:
+          type: string
+        merchant_id:
+          type: string
+        user_role:
+          type: string
+        name:
+          type: string
+        email:
+          type: string
+        expires_at:
+          type: integer
+    CreatePaymentLinkRequest:
+      type: object
+      properties:
+        amount:
+          type: string
+          example: "100"
+        token_symbol:
+          type: string
+          example: USDC
+        chain_id:
+          type: integer
+          example: 97
+        order_id:
+          type: string
+    PaymentLink:
+      type: object
+      properties:
+        id:
+          type: string
+        order_id:
+          type: string
+        url:
+          type: string
+          format: uri
+        status:
+          type: string
+    WebhookRequest:
+      type: object
+      required: [url, events]
+      properties:
+        url:
+          type: string
+          format: uri
+        events:
+          type: array
+          items:
+            type: string
+          example: [payment.created, payment.confirmed, payment.rejected]
+    Webhook:
+      type: object
+      properties:
+        id:
+          type: string
+        url:
+          type: string
+          format: uri
+        events:
+          type: array
+          items:
+            type: string
+        status:
+          type: string
+    Order:
+      type: object
+      properties:
+        id:
+          type: string
+        order_id:
+          type: string
+        token_symbol:
+          type: string
+        amount:
+          type: string
+        status:
+          type: string
+        tx_hash:
+          type: string
+    RiskSummary:
+      type: object
+      properties:
+        from:
+          type: string
+          format: date-time
+        to:
+          type: string
+          format: date-time
+        total:
+          type: integer
+        counts:
+          type: object
+          additionalProperties:
+            type: integer
+    RiskEventList:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: integer
+              orderId:
+                type: string
+              tokenSymbol:
+                type: string
+              txHash:
+                type: string
+              trafficLight:
+                type: string
+        total:
+          type: integer
+    GenericSuccess:
+      type: object
+      properties:
+        success:
+          type: boolean
+
+paths:
+  /api/v1/merchant/auth/login:
+    post:
+      tags: [Auth]
+      summary: Merchant login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+
+  /api/v1/merchant/payment-links:
+    post:
+      tags: [Payment Links]
+      summary: Create payment link
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreatePaymentLinkRequest'
+      responses:
+        '200':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentLink'
+    get:
+      tags: [Payment Links]
+      summary: List payment links
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: List
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/PaymentLink'
+
+  /api/v1/merchant/orders/{order_id}:
+    get:
+      tags: [Orders]
+      summary: Get order
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: order_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Order details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Order'
+
+  /api/v1/merchant/orders/{order_id}/proof:
+    get:
+      tags: [Orders]
+      summary: Get order proof
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: order_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Auditable order proof
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  order_id:
+                    type: string
+                  proof:
+                    type: object
+                    additionalProperties: true
+
+  /api/v1/merchant/webhooks:
+    post:
+      tags: [Webhooks]
+      summary: Create webhook endpoint
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WebhookRequest'
+      responses:
+        '200':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Webhook'
+    get:
+      tags: [Webhooks]
+      summary: List webhooks
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: List
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Webhook'
+
+  /api/v1/merchant/webhooks/{webhook_id}/test:
+    post:
+      tags: [Webhooks]
+      summary: Send test webhook event
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: webhook_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Test event sent
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericSuccess'
+
+  /api/v1/merchant/webhooks/{webhook_id}/rotate-secret:
+    post:
+      tags: [Webhooks]
+      summary: Rotate webhook secret
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: webhook_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Secret rotated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericSuccess'
+
+  /api/v1/merchant/risk/assessments/summary:
+    get:
+      tags: [Risk]
+      summary: Risk assessment summary
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: from
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: to
+          in: query
+          schema:
+            type: string
+            format: date-time
+      responses:
+        '200':
+          description: Summary
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RiskSummary'
+
+  /api/v1/merchant/risk/assessments:
+    get:
+      tags: [Risk]
+      summary: Risk assessment events
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+        - name: offset
+          in: query
+          schema:
+            type: integer
+        - name: traffic_light
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Events
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RiskEventList'
+
+  /api/v1/chains/{chain_id}/reorg-params:
+    get:
+      tags: [Public Risk]
+      summary: Get chain reorg parameters
+      parameters:
+        - name: chain_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Reorg parameters
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+
+  /api/v1/risk/token/{token_symbol}/peg-stability:
+    get:
+      tags: [Public Risk]
+      summary: Get token peg stability data
+      parameters:
+        - name: token_symbol
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Peg stability
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
