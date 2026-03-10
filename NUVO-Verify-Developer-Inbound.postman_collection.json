@@ -1,0 +1,626 @@
+{
+  "info": {
+    "_postman_id": "db8e111f-7e51-4f27-970a-eab6abb83a20",
+    "name": "NUVO Verify API - Developer Inbound Collection",
+    "description": "Run-ready collection for NUVO Verify merchant flows (Sandbox/Production). Covers auth, payment links, webhooks, orders/proof, risk summary, and public risk endpoints.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "https://admin.nuorbit.nuvosphere.io"
+    },
+    {
+      "key": "merchant_email",
+      "value": ""
+    },
+    {
+      "key": "merchant_password",
+      "value": ""
+    },
+    {
+      "key": "merchant_token",
+      "value": ""
+    },
+    {
+      "key": "merchant_id",
+      "value": ""
+    },
+    {
+      "key": "order_id",
+      "value": ""
+    },
+    {
+      "key": "webhook_id",
+      "value": ""
+    },
+    {
+      "key": "webhook_secret",
+      "value": ""
+    },
+    {
+      "key": "chain_id",
+      "value": "97"
+    },
+    {
+      "key": "token_symbol",
+      "value": "USDC"
+    }
+  ],
+  "item": [
+    {
+      "name": "01 Auth & Context",
+      "item": [
+        {
+          "name": "Merchant Login",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/merchant/auth/login",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "merchant",
+                "auth",
+                "login"
+              ]
+            },
+            "description": "Login and auto-save merchant_token + merchant_id.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{merchant_email}}\",\n  \"password\": \"{{merchant_password}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", function () { pm.response.to.have.status(200); });",
+                  "const data = pm.response.json();",
+                  "if (data.token) pm.collectionVariables.set(\"merchant_token\", data.token);",
+                  "if (data.merchant_id) pm.collectionVariables.set(\"merchant_id\", data.merchant_id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get Merchant Profile",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/merchant/merchant",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "merchant",
+                "merchant"
+              ]
+            },
+            "description": "Confirm account context before running payment/webhook flows.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{merchant_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "02 Sandbox Payment Flow (Checkout -> Ledger)",
+      "item": [
+        {
+          "name": "Create Payment Link",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/merchant/payment-links",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "merchant",
+                "payment-links"
+              ]
+            },
+            "description": "Checkout initiation for VERIFY mode. Stores order_id for downstream calls.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{merchant_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"amount\": \"10.50\",\n  \"token_symbol\": \"{{token_symbol}}\",\n  \"chain_id\": 97,\n  \"description\": \"Sandbox checkout\",\n  \"expires_in_minutes\": 20\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200/201\", function () { pm.expect([200,201]).to.include(pm.response.code); });",
+                  "const data = pm.response.json();",
+                  "const id = data.order_id || data.id;",
+                  "if (id) pm.collectionVariables.set(\"order_id\", id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "List Payment Links",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/merchant/payment-links",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "merchant",
+                "payment-links"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "20"
+                },
+                {
+                  "key": "offset",
+                  "value": "0"
+                }
+              ]
+            },
+            "description": "Track checkout statuses (CHECKOUT_VERIFIED/PAID/etc).",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{merchant_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Order",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/merchant/orders/{{order_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "merchant",
+                "orders",
+                "{{order_id}}"
+              ]
+            },
+            "description": "Validate status transitions after customer payment.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{merchant_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Order Proof",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/merchant/orders/{{order_id}}/proof",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "merchant",
+                "orders",
+                "{{order_id}}",
+                "proof"
+              ]
+            },
+            "description": "Fetch proof payload for audit/ledger reconciliation.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{merchant_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "03 Webhooks (Delivery & Verification)",
+      "item": [
+        {
+          "name": "Create Webhook",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/merchant/webhooks",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "merchant",
+                "webhooks"
+              ]
+            },
+            "description": "Creates webhook endpoint and stores webhook_id + webhook_secret.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{merchant_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"url\": \"https://example.com/webhooks/nuvo\",\n  \"events\": [\n    \"payment.created\",\n    \"payment.confirmed\",\n    \"payment.rejected\"\n  ],\n  \"enabled\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200/201\", function () { pm.expect([200,201]).to.include(pm.response.code); });",
+                  "const data = pm.response.json();",
+                  "if (data.id) pm.collectionVariables.set(\"webhook_id\", data.id);",
+                  "if (data.secret) pm.collectionVariables.set(\"webhook_secret\", data.secret);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "List Webhooks",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/merchant/webhooks",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "merchant",
+                "webhooks"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{merchant_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Send Test Webhook",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/merchant/webhooks/{{webhook_id}}/test",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "merchant",
+                "webhooks",
+                "{{webhook_id}}",
+                "test"
+              ]
+            },
+            "description": "Trigger end-to-end webhook delivery to your receiver service.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{merchant_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Rotate Webhook Secret",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/merchant/webhooks/{{webhook_id}}/rotate-secret",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "merchant",
+                "webhooks",
+                "{{webhook_id}}",
+                "rotate-secret"
+              ]
+            },
+            "description": "Rotate secret and update your receiver immediately.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{merchant_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const data = pm.response.json();",
+                  "if (data.secret) pm.collectionVariables.set(\"webhook_secret\", data.secret);"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "04 Risk & Traffic Light Endpoints",
+      "item": [
+        {
+          "name": "Merchant Risk Summary",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/merchant/risk/assessments/summary",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "merchant",
+                "risk",
+                "assessments",
+                "summary"
+              ],
+              "query": [
+                {
+                  "key": "from",
+                  "value": "2026-03-01T00:00:00Z"
+                },
+                {
+                  "key": "to",
+                  "value": "2026-03-31T23:59:59Z"
+                }
+              ]
+            },
+            "description": "Counts by GREEN/YELLOW/RED/PURPLE for ops reporting.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{merchant_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Merchant Risk Events",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/merchant/risk/assessments",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "merchant",
+                "risk",
+                "assessments"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "50"
+                },
+                {
+                  "key": "offset",
+                  "value": "0"
+                }
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{merchant_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Public - Chain Reorg Params",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/chains/{{chain_id}}/reorg-params",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "chains",
+                "{{chain_id}}",
+                "reorg-params"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Public - Token Peg Stability",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/risk/token/{{token_symbol}}/peg-stability",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "risk",
+                "token",
+                "{{token_symbol}}",
+                "peg-stability"
+              ]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}
